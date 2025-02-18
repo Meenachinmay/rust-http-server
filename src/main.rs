@@ -2,9 +2,14 @@ mod config;
 mod handlers;
 mod models;
 mod repositories;
+mod auth;
 
-use actix_web::{web, App, HttpServer, middleware::Logger, middleware::ErrorHandlers};
-use handlers::user_handler::{create_user, get_user};
+use actix_web::{web, App, HttpServer, middleware::Logger};
+use auth::middleware::AuthMiddleware;
+use handlers::{
+    user_handler::{create_user, get_user},
+    auth_handler::authenticate
+};
 use repositories::user_repository::UserRepository;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
@@ -36,8 +41,10 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .wrap(Logger::default()) // Add logging middleware
+            .wrap(AuthMiddleware) // Let's add auth middleware
             .wrap(Logger::new("%a %r %s %b %{Referer}i %{User-Agent}i %T")) // Detailed logging
             .app_data(user_repository.clone())
+            .route("/auth", web::post().to(authenticate))
             .route("/users", web::post().to(create_user))
             .route("/users/{id}", web::get().to(get_user))
     }).workers(28)
