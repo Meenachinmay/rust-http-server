@@ -11,7 +11,7 @@ pub struct Claims {
 }
 
 const JWT_SECRET: &[u8] = b"my-secret-key";
-const TOKEN_EXPIRATION_TIME: Duration = Duration::seconds(120);
+const TOKEN_EXPIRATION_TIME: Duration = Duration::seconds(3600);
 
 pub fn generate_token(email: String) -> Result<String, JwtError> {
     let now = Utc::now();

@@ -45,7 +45,7 @@ where
     forward_ready!(service);
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
-        if req.path() == "/auth" {
+        if req.path() == "/signup" || req.path() == "/signin" {
             let fut = self.service.call(req);
             return Box::pin(async move {
                 let res = fut.await?;
