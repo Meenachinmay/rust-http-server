@@ -5,7 +5,7 @@ use tracing::{info, error};
 
 pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
     let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:password@localhost:5432/rust".to_string());
+        .unwrap_or_else(|_| "postgresql://rust_1_user:XEO0mscxYhsykTLSksdlYGUSFlCAD7qK@dpg-cv2q52l6l47c73821js0-a.oregon-postgres.render.com/rust_1".to_string());
 
     info!("Creating database connection pool...");
 
