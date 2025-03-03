@@ -10,7 +10,7 @@ on:
 # Environment variables available to all jobs
 env:
   DOCKER_IMAGE: startup2023/rust-auth-server  # Updated image name for your Rust project
-  RUST_VERSION: '1.80.0'  # Latest stable Rust version
+  RUST_VERSION: '1.85.0'  # Latest stable Rust version
 
 jobs:
   test-and-build:
