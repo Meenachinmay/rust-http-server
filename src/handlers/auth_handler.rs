@@ -6,7 +6,7 @@ use tracing::{error, info};
 use crate::auth::jwt::{generate_token, validate_token};
 use crate::communication::email::send_verification_email;
 use crate::models::user::CreateUserRequest;
-use crate::repositories::user_repository::{AuthError, UserRepository};
+use crate::repositories::user_repository::UserRepository;
 
 #[derive(Deserialize)]
 pub struct SignupRequest {
