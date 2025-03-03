@@ -68,7 +68,7 @@ async fn main() -> std::io::Result<()> {
             .route("/users", web::post().to(create_user))
             .route("/users/{id}", web::get().to(get_user))
     }).workers(28)
-        .bind("127.0.0.1:8080")?
+        .bind("0.0.0.0:8080")?
         .run()
         .await
 }
