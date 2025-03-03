@@ -31,7 +31,7 @@ jobs:
 
       # Step 3: Cache dependencies to speed up workflow
       - name: Cache cargo registry
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
