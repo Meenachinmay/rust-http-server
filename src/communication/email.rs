@@ -1,3 +1,5 @@
+// email.rs
+
 use sendgrid::v3::{Content, Email, Message, Personalization, Sender};
 use reqwest::Client;
 use std::env;
@@ -7,7 +9,7 @@ use std::env;
 pub enum EmailError {
     EnvVarMissing(String),
     SendGridError(String),
-    EmailValidationError(String),
+    ConfigError(String),
 }
 
 impl std::fmt::Display for EmailError {
@@ -15,7 +17,7 @@ impl std::fmt::Display for EmailError {
         match self {
             EmailError::EnvVarMissing(var) => write!(f, "Missing environment variable: {}", var),
             EmailError::SendGridError(err) => write!(f, "SendGrid error: {}", err),
-            EmailError::EmailValidationError(err) => write!(f, "Email validation error: {}", err),
+            EmailError::ConfigError(err) => write!(f, "Configuration error: {}", err),
         }
     }
 }
@@ -23,11 +25,6 @@ impl std::fmt::Display for EmailError {
 impl std::error::Error for EmailError {}
 
 pub async fn send_verification_email(to_email: &str, token: &str) -> Result<(), EmailError> {
-
-    if !to_email.contains('@') {
-        return Err(EmailError::EmailValidationError("Invalid email address".to_string()));
-    }
-
     // Retrieve necessary environment variables
     let sendgrid_api_key = env::var("SENDGRID_API_KEY")
         .map_err(|_| EmailError::EnvVarMissing("SENDGRID_API_KEY".to_string()))?;

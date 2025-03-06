@@ -16,7 +16,6 @@ use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use dotenv::dotenv;
 use std::env;
-use actix_cors::Cors;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -34,9 +33,6 @@ async fn main() -> std::io::Result<()> {
             eprintln!("Required environment variable '{}' is not set", var);
         }
     }
-
-    // Get frontend URL from environment (for CORS)
-    // let frontend_url = env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
 
     // Initialize better logging
     FmtSubscriber::builder()
@@ -61,36 +57,17 @@ async fn main() -> std::io::Result<()> {
 
     // Start HTTP server
     HttpServer::new(move || {
-        // Create a more permissive CORS configuration that explicitly includes your frontend URL
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
-            .allowed_headers(vec!["Authorization", "Content-Type"])
-            .supports_credentials()
-            .max_age(3600);
-
-        // Create the main App
         App::new()
-            .wrap(cors)
-            .wrap(Logger::default())
-            .wrap(Logger::new("%a %r %s %b %{Referer}i %{User-Agent}i %T"))
+            .wrap(Logger::default()) // Add logging middleware
+            .wrap(AuthMiddleware) // Let's add auth middleware
+            .wrap(Logger::new("%a %r %s %b %{Referer}i %{User-Agent}i %T")) // Detailed logging
             .app_data(user_repository.clone())
-            // Public routes that don't need authentication
-            .service(
-                web::scope("api/auth")
-                    .route("/signup", web::post().to(signup))
-                    .route("/signin", web::post().to(signin))
-            )
-            // Protected routes with authentication middleware
-            .service(
-                web::scope("api")
-                    .wrap(AuthMiddleware)
-                    .route("/users", web::post().to(create_user))
-                    .route("/users/{id}", web::get().to(get_user))
-                    .route("/setpassword", web::post().to(set_password))
-            )
-    })
-        .workers(28)
+            .route("/signup", web::post().to(signup))
+            .route("/signin", web::post().to(signin))
+            .route("/setpassword", web::post().to(set_password))
+            .route("/users", web::post().to(create_user))
+            .route("/users/{id}", web::get().to(get_user))
+    }).workers(28)
         .bind("0.0.0.0:8080")?
         .run()
         .await

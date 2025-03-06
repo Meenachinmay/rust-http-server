@@ -159,7 +159,6 @@ pub async fn signin(
     signin_req: web::Json<SigninRequest>,
     repo: web::Data<UserRepository>,
 ) -> impl Responder {
-
     info!("Signin request for email: {}", signin_req.email);
 
     match repo.authenticate_user(&signin_req.email, &signin_req.password).await {
@@ -171,7 +170,6 @@ pub async fn signin(
                 })),
                 Err(e) => {
                     error!("Token generation failed: {:?}", e);
-                    info!("SIGN IN FAILED_CANNOT GENERATE TOKEN for USER: {}", signin_req.email);
                     HttpResponse::InternalServerError().json(json!({
                         "error": "Failed to generate token"
                     }))
@@ -183,7 +181,6 @@ pub async fn signin(
         })),
         Err(e) => {
             error!("Authentication error: {:?}", e);
-            info!("SIGN IN FAILED_CANNOT GENERATE TOKEN for USER: {}", signin_req.email);
             // match e {
             //     AuthError::UserNotFound => HttpResponse::NotFound(),
             //     _ => HttpResponse::InternalServerError(),
