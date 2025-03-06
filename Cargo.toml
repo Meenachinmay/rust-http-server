@@ -3,6 +3,14 @@ name = "first-backend"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "first_backend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "first-backend"
+path = "src/main.rs"
+
 [dependencies]
 actix-web = "4.4.0"
 tokio = { version = "1.32.0", features = ["full"] }
@@ -22,3 +30,8 @@ argon2 = "0.5.3"
 lettre = "0.11.13"
 sendgrid = "0.23.0"
 reqwest = "0.12.12"
+tokio-test = "0.4.4"
+mockall = "0.13.1"
+test-log = "0.2.17"
+actix-cors = "0.6.4"
+http = "0.2"
