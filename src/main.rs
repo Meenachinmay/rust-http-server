@@ -8,7 +8,7 @@ mod communication;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 use auth::middleware::AuthMiddleware;
 use handlers::{
-    user_handler::{create_user, get_user},
+    user_handler::{get_user},
     auth_handler::{signin, signup, set_password}
 };
 use repositories::user_repository::UserRepository;
@@ -75,17 +75,14 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(Logger::new("%a %r %s %b %{Referer}i %{User-Agent}i %T"))
             .app_data(user_repository.clone())
-            // Public routes that don't need authentication
             .service(
                 web::scope("api/auth")
                     .route("/signup", web::post().to(signup))
                     .route("/signin", web::post().to(signin))
             )
-            // Protected routes with authentication middleware
             .service(
                 web::scope("api")
                     .wrap(AuthMiddleware)
-                    .route("/users", web::post().to(create_user))
                     .route("/users/{id}", web::get().to(get_user))
                     .route("/setpassword", web::post().to(set_password))
             )
