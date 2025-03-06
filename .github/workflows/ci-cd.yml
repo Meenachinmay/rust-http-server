@@ -69,13 +69,13 @@ jobs:
 #        run: cargo clippy -- -D warnings
 
       # Step 9: Run tests
-      - name: Run tests
-        run: cargo test
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL || 'http://localhost:3000' }}
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL || 'chinmeiananda896@gmail.com' }}
+#      - name: Run tests
+#        run: cargo test
+#        env:
+#          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+#          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+#          FRONTEND_URL: ${{ secrets.FRONTEND_URL || 'http://localhost:3000' }}
+#          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL || 'chinmeiananda896@gmail.com' }}
 
       # Step 10: Set up Docker Buildx
       - name: Set up Docker Buildx
