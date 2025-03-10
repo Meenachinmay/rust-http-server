@@ -4,8 +4,7 @@ use std::time::Duration;
 use tracing::{info, error};
 
 pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
-    let database_url = std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgresql://rust_1_user:XEO0mscxYhsykTLSksdlYGUSFlCAD7qK@dpg-cv2q52l6l47c73821js0-a.oregon-postgres.render.com/rust_1".to_string());
+    let database_url = std::env::var("DATABASE_URL").unwrap();
 
     info!("Creating database connection pool...");
 
@@ -27,4 +26,24 @@ pub async fn create_pool() -> Result<PgPool, sqlx::Error> {
     }
 
     Ok(pool)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dotenv::dotenv;
+
+    #[tokio::test]
+    async fn test_create_pool_success() {
+        dotenv().ok();
+
+        let result = create_pool().await;
+        assert!(result.is_ok(), "Should create a database pool successfully");
+
+        if let Ok(pool) = result {
+            let query_result = sqlx::query("SELECT 1").fetch_one(&pool).await;
+            assert!(query_result.is_ok(), "Should execute a simple query");
+        }
+    }
+
 }
