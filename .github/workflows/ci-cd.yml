@@ -12,6 +12,7 @@ env:
   PROJECT_ID: rusty-lamb
   SERVICE_NAME: rusty-lamb
   REGION: us-central1               # GCP region
+  REGISTRY_REGION: asia-northeast1
   ARTIFACT_REGISTRY: rusty-lamb     # Your Artifact Registry repository name
   RUST_VERSION: '1.85.0'            # Latest stable Rust version
 
@@ -94,20 +95,20 @@ jobs:
       # Step 12: Configure Docker for Artifact Registry
       - name: Configure Docker for GCP
         run: |
-          gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
 
       # Step 13: Build and tag the Docker image
       - name: Build and tag Docker image
         run: |
-          docker build -t ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
+          docker build -t ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
 
       # Step 14: Push the Docker image to Artifact Registry
       - name: Push Docker image to Artifact Registry
         if: github.event_name != 'pull_request'
         run: |
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-          docker push ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
+          docker push ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
 
       # Step 15: Deploy to Cloud Run (or your preferred GCP compute service)
       - name: Deploy to Cloud Run
@@ -115,7 +116,7 @@ jobs:
         run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
             --region ${{ env.REGION }} \
-            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --image ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --platform managed \
             --allow-unauthenticated \
             --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }},FRONTEND_URL=${{ secrets.FRONTEND_URL }},SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}"
