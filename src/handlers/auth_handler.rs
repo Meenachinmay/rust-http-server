@@ -1,16 +1,16 @@
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tracing::{error, info};
 
 use crate::auth::jwt::{generate_token, validate_token};
 use crate::communication::email::send_verification_email;
 use crate::models::user::CreateUserRequest;
-use crate::repositories::user_repository::{AuthError, UserRepository};
+use crate::repositories::user_repository::UserRepository;
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct SignupRequest {
-   email: String,
+   pub email: String,
 }
 
 #[derive(Deserialize)]
@@ -47,14 +47,14 @@ pub async fn signup(signup_req: web::Json<SignupRequest>, repo: web::Data<UserRe
     // Check if user already exists
     match repo.get_user_by_email(&signup_req.email).await {
         Ok(Some(_)) => {
-            HttpResponse::BadRequest().json(json!({
+            return HttpResponse::BadRequest().json(json!({
                 "error": "User with this email already exists"
             }));
         }
         Ok(None) => (),
         Err(e) => {
             error!("Database error: {:?}", e);
-            HttpResponse::InternalServerError().json(json!({
+            return HttpResponse::InternalServerError().json(json!({
                 "error": "Internal server error"
             }));
         }
@@ -159,6 +159,7 @@ pub async fn signin(
     signin_req: web::Json<SigninRequest>,
     repo: web::Data<UserRepository>,
 ) -> impl Responder {
+
     info!("Signin request for email: {}", signin_req.email);
 
     match repo.authenticate_user(&signin_req.email, &signin_req.password).await {
@@ -170,6 +171,7 @@ pub async fn signin(
                 })),
                 Err(e) => {
                     error!("Token generation failed: {:?}", e);
+                    info!("SIGN IN FAILED_CANNOT GENERATE TOKEN for USER: {}", signin_req.email);
                     HttpResponse::InternalServerError().json(json!({
                         "error": "Failed to generate token"
                     }))
@@ -181,6 +183,7 @@ pub async fn signin(
         })),
         Err(e) => {
             error!("Authentication error: {:?}", e);
+            info!("SIGN IN FAILED_CANNOT GENERATE TOKEN for USER: {}", signin_req.email);
             // match e {
             //     AuthError::UserNotFound => HttpResponse::NotFound(),
             //     _ => HttpResponse::InternalServerError(),
@@ -189,5 +192,73 @@ pub async fn signin(
                 "error": "Authentication failed"
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod auth_handler_tests {
+    use actix_web::{test, web, App, http::StatusCode};
+    use dotenv::dotenv;
+    use sqlx::postgres::{PgPool, PgPoolOptions};
+    use uuid::Uuid;
+    use crate::handlers::auth_handler::{signup, SignupRequest};
+    use crate::models::user::CreateUserRequest;
+    use crate::repositories::user_repository::UserRepository;
+
+    async fn setup_test_db() -> PgPool {
+        dotenv().ok();
+
+        let database_url = std::env::var("DATABASE_URL_TEST")
+            .expect("DATABASE_URL_TEST must be set for tests");
+
+        PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&database_url)
+            .await
+            .expect("Failed to create test pool")
+    }
+
+    #[tokio::test]
+    async fn test_signup_rejects_duplicate_email() {
+        let pool = setup_test_db().await;
+        let user_repo = web::Data::new(UserRepository::new(pool.clone()));
+
+        let test_email = format!("test_dup_{}@example.com", Uuid::new_v4());
+
+        // Create a user directly in the database
+        let user_request = CreateUserRequest {
+            email: test_email.clone(),
+            password: "TestPassword123".to_string(),
+        };
+        user_repo.create_user(user_request).await.expect("Failed to create test user");
+
+        // Now set up the app and test
+        let app = test::init_service(
+            App::new()
+                .app_data(user_repo.clone())
+                .route("/signup", web::post().to(signup))
+        ).await;
+
+        // Now the signup should fail because the user already exists
+        let req = test::TestRequest::post()
+            .uri("/signup")
+            .set_json(SignupRequest {
+                email: test_email.clone(),
+            })
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "Signup should fail for existing user");
+
+        // Test the error message
+        let body = test::read_body(resp).await;
+        let error_response: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+        assert!(error_response.get("error").is_some(), "Error field should exist in response");
+        assert_eq!(
+            error_response.get("error").unwrap().as_str().unwrap(),
+            "User with this email already exists",
+            "Error message should indicate duplicate user"
+        );
     }
 }
