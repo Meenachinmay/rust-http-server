@@ -35,3 +35,4 @@ mockall = "0.13.1"
 test-log = "0.2.17"
 actix-cors = "0.6.4"
 http = "0.2"
+migrations = { git = "https://github.com/Meenachinmay/migrations.git"}
