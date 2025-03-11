@@ -3,17 +3,9 @@ name: CI/CD Pipeline for GCP Deployment
 # Define when this pipeline should run
 on:
   push:
-    branches: [ dev, main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ dev ]
 
-# Environment variables available to all jobs
 env:
-  PROJECT_ID: rusty-lamb
-  SERVICE_NAME: rusty-lamb
-  REGION: us-central1               # GCP region
-  REGISTRY_REGION: asia-northeast1
-  ARTIFACT_REGISTRY: rusty-lamb     # Your Artifact Registry repository name
   RUST_VERSION: '1.85.0'            # Latest stable Rust version
 
 jobs:
@@ -36,11 +28,9 @@ jobs:
           --health-retries 5
 
     steps:
-      # Step 1: Check out the repository code
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Step 2: Set up Rust environment
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -49,7 +39,6 @@ jobs:
           override: true
           components: rustfmt, clippy
 
-      # Step 3: Cache dependencies to speed up workflow
       - name: Cache cargo registry
         uses: actions/cache@v3
         with:
@@ -61,13 +50,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      # Step 4: Install additional dependencies if needed
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libssl-dev libpq-dev pkg-config
 
-      # Step 5: Create temporary .env file for testing
       - name: Create .env file
         run: |
           echo "DATABASE_URL_TEST=postgresql://postgres:password@localhost:5432/rust" > .env
@@ -77,7 +64,6 @@ jobs:
           echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
           echo "Created .env file with necessary configurations"
 
-       # Step 6: Install SQLx CLI for database operations
       - name: Install SQLx CLI
         run: cargo install sqlx-cli --no-default-features --features postgres
 
@@ -89,45 +75,4 @@ jobs:
       - name: Run tests
         run: cargo test
         env:
-          # Use the Docker PostgreSQL container for tests
           DATABASE_URL_TEST: postgresql://postgres:password@localhost:5432/rust
-
-      # Step 10: Authenticate to Google Cloud
-      - id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v2'
-        with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
-
-      # Step 11: Set up Cloud SDK
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v2'
-
-      # Step 12: Configure Docker for Artifact Registry
-      - name: Configure Docker for GCP
-        run: |
-          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
-
-      # Step 13: Build and tag the Docker image
-      - name: Build and tag Docker image
-        run: |
-          docker build -t ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
-
-      # Step 14: Push the Docker image to Artifact Registry
-      - name: Push Docker image to Artifact Registry
-        if: github.event_name != 'pull_request'
-        run: |
-          docker push ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
-          docker push ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
-
-      # Step 15: Deploy to Cloud Run (or your preferred GCP compute service)
-      - name: Deploy to Cloud Run
-        if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
-        run: |
-          gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --region ${{ env.REGION }} \
-            --image ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
-            --platform managed \
-            --allow-unauthenticated \
-            --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }},FRONTEND_URL=${{ secrets.FRONTEND_URL }},SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}"
