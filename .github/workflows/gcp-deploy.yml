@@ -21,6 +21,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Create .env file
+        run: |
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" > .env
+          echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
+          echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
+          echo "Created .env file with necessary configurations"
+
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v2'
