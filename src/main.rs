@@ -29,7 +29,7 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Verify that required environment variables are present
-    let required_vars = ["SENDGRID_API_KEY", "FRONTEND_URL", "SENDER_EMAIL", "DATABASE_URL"];
+    let required_vars = ["SENDGRID_API_KEY", "FRONTEND_URL", "SENDER_EMAIL", "DATABASE_URL", "DATABASE_URL_TEST"];
     for var in required_vars.iter() {
         if env::var(var).is_err() {
             eprintln!("Required environment variable '{}' is not set", var);
