@@ -1,23 +1,31 @@
 mod config;
+mod services;
 mod handlers;
 mod models;
 mod repositories;
 mod auth;
 mod communication;
 
-use actix_web::{web, App, HttpServer, middleware::Logger};
+use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer, Responder};
 use auth::middleware::AuthMiddleware;
 use handlers::{
-    user_handler::{get_user},
-    auth_handler::{signin, signup, set_password}
+    auth_handler::{set_password, signin, signup},
+    user_handler::get_user,
+    video_handler::{get_video_token, list_videos, create_upload_url}
 };
-use repositories::user_repository::UserRepository;
+use repositories::{
+    course_repository::CourseRepository,
+    user_repository::UserRepository,
+};
+
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 use dotenv::dotenv;
 use std::env;
 use actix_cors::Cors;
 use migrations::Migrator;
+use services::mux_service::MuxService;
+use config::mux::MuxConfig;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -29,7 +37,15 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Verify that required environment variables are present
-    let required_vars = ["SENDGRID_API_KEY", "FRONTEND_URL", "SENDER_EMAIL", "DATABASE_URL", "DATABASE_URL_TEST"];
+    let required_vars = [
+        "SENDGRID_API_KEY",
+        "FRONTEND_URL",
+        "SENDER_EMAIL",
+        "DATABASE_URL",
+        "DATABASE_URL_TEST",
+        "MUX_TOKEN_ID",
+        "MUX_TOKEN_SECRET",
+        "MUX_SIGNING_KEY_ID"];
     for var in required_vars.iter() {
         if env::var(var).is_err() {
             eprintln!("Required environment variable '{}' is not set", var);
@@ -69,11 +85,20 @@ async fn main() -> std::io::Result<()> {
     info!("Database pool created successfully");
 
     // Create user repository
-    let user_repository = web::Data::new(UserRepository::new(pool));
+    let user_repository = web::Data::new(UserRepository::new(pool.clone()));
+    let course_repository = web::Data::new(CourseRepository::new(pool.clone()));
+
+
 
     // Start HTTP server
     info!("Starting server...");
     HttpServer::new(move || {
+
+        // create mux service
+        let mux_config = MuxConfig::from_env()
+            .expect("Failed to load Mux configuration");
+        let mux_service = web::Data::new(MuxService::new(mux_config));
+
         // Create a more permissive CORS configuration that explicitly includes your frontend URL
         let cors = Cors::default()
             .allow_any_origin()
@@ -88,16 +113,22 @@ async fn main() -> std::io::Result<()> {
             .wrap(Logger::default())
             .wrap(Logger::new("%a %r %s %b %{Referer}i %{User-Agent}i %T"))
             .app_data(user_repository.clone())
+            .app_data(course_repository.clone())
+            .app_data(mux_service)
             .service(
                 web::scope("api/auth")
                     .route("/signup", web::post().to(signup))
                     .route("/signin", web::post().to(signin))
+                    .route("/test-mux", web::get().to(test_mux_service))
             )
             .service(
                 web::scope("api")
                     .wrap(AuthMiddleware)
                     .route("/users/{id}", web::get().to(get_user))
                     .route("/setpassword", web::post().to(set_password))
+                    .route("/videos/token", web::post().to(get_video_token))
+                    .route("/videos", web::get().to(list_videos))
+                    .route("/mux/upload-url", web::post().to(create_upload_url))
             )
     })
         .workers(28)

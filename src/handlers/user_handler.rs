@@ -1,6 +1,7 @@
 use actix_web::{web, HttpResponse, Responder};
 use uuid::Uuid;
 use crate::repositories::user_repository::UserRepository;
+
 use tracing::{error, info, instrument};
 use serde_json::json;  // Add this import for json! macro
 
