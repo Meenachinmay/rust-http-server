@@ -55,6 +55,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev libpq-dev pkg-config
 
+      - name: Create mux.pem file
+        run: |
+          echo "${{ secrets.MUX_PEM_CONTENT }}" > mux.pem
+          chmod 600 mux.pem
+          echo "Created mux.pem file with secret content"
+
       - name: Create .env file
         run: |
           echo "DATABASE_URL_TEST=postgresql://postgres:password@localhost:5432/rust" > .env
