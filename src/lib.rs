@@ -5,6 +5,8 @@ pub mod models;
 pub mod repositories;
 pub mod auth;
 pub mod communication;
+pub mod services;
+pub use crate::services::mux_service::MuxService;
 
 // Re-export specific items that tests will need
 pub use config::database;
