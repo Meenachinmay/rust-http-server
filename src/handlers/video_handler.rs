@@ -1,7 +1,8 @@
 use actix_web::{web, Error, HttpResponse, Responder, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use crate::auth::extractor::AuthUser;
-use crate::models::course::VideoPlaybackRequest;
+use crate::models::course::{CreateVideoRequest, VideoPlaybackRequest};
 use crate::repositories::course_repository::CourseRepository;
 use crate::repositories::user_repository::UserRepository;
 use crate::services::mux_service::MuxService;
@@ -12,7 +13,17 @@ struct UploadUrlResponse {
     upload_url: String,
 }
 
-// Get a token for video playback
+#[derive(Serialize)]
+struct PlaybackTokenResponse {
+    token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UploadCreateVideoRequest {
+    course_id: Uuid,
+    title: String
+}
+
 pub async fn get_video_token(
     req: web::Json<VideoPlaybackRequest>,
     auth_user: AuthUser,
@@ -22,7 +33,6 @@ pub async fn get_video_token(
 ) -> Result<HttpResponse> {
     let video_id = req.video_id;
 
-    // First, we need to get the full user object from the database using the email
     let user = match auth_user.get_user_from_db(&user_repo).await {
         Ok(u) => u,
         Err(_) => return Ok(HttpResponse::InternalServerError().json(serde_json::json!({
@@ -30,7 +40,6 @@ pub async fn get_video_token(
         }))),
     };
 
-    // Get the video
     let video = match course_repo.get_video(video_id).await {
         Ok(Some(v)) => v,
         Ok(None) => return Ok(HttpResponse::NotFound().json(serde_json::json!({
@@ -39,7 +48,6 @@ pub async fn get_video_token(
         Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
     };
 
-    // Check if user is enrolled in the course
     let is_enrolled = match course_repo.is_user_enrolled(user.uid, video.course_id).await {
         Ok(enrolled) => enrolled,
         Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
@@ -51,16 +59,17 @@ pub async fn get_video_token(
         })));
     }
 
-    // Generate a playback token
-    let token = match mux_service.create_playback_token(&video.mux_playback_id) {
-        Ok(t) => t,
-        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
+    let token = match &video.mux_playback_id {
+        Some(id) => mux_service.create_playback_token(id),
+        None => return Ok(HttpResponse::BadRequest().json(serde_json::json!({
+            "error": "No playback Id is provided yet"
+        }))),
     };
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "playback_id": video.mux_playback_id,
-        "token": token
-    })))
+    let token_string = token?.to_string();
+    let response = PlaybackTokenResponse { token: token_string };
+
+    Ok(HttpResponse::Ok().json(response))
 }
 
 pub async fn list_videos(
@@ -94,17 +103,35 @@ pub async fn list_videos(
     })))
 }
 
-// Handler for creating direct upload URLs
 pub async fn create_upload_url(
-    mux_service: web::Data<MuxService>
+    mux_service: web::Data<MuxService>,
+    course_repo: web::Data<CourseRepository>,
+    payload: web::Json<UploadCreateVideoRequest>
 ) -> impl Responder {
     match mux_service.create_direct_upload().await {
         Ok(upload_data) => {
-            // Return the upload URL and ID
-            HttpResponse::Ok().json(UploadUrlResponse {
-                upload_id: upload_data.id,
-                upload_url: upload_data.url,
-            })
+            // save the video here with uploadID before returning to user.
+            let video_request = CreateVideoRequest {
+                course_id: payload.course_id,
+                title: payload.title.clone(),
+                upload_id: upload_data.id.clone(),
+            };
+
+            match course_repo.create_video(video_request).await {
+                Ok(_) => {
+                    // Return the upload URL and ID
+                    HttpResponse::Ok().json(UploadUrlResponse {
+                        upload_id: upload_data.id,
+                        upload_url: upload_data.url,
+                    })
+                },
+                Err(e) => {
+                    eprintln!("error saving video record: {:?}", e);
+                    HttpResponse::InternalServerError().json(serde_json::json!({
+                       "error": "Failed to save video record in DB"
+                    }))
+                }
+            }
         },
         Err(e) => {
             eprintln!("Error creating upload URL: {:?}", e);
@@ -124,7 +151,6 @@ mod video_handler_tests {
     use uuid::Uuid;
     use crate::models::user::User;
     use crate::auth::extractor::AuthUser;
-    use bigdecimal::BigDecimal;
     use crate::config::mux::MuxConfig;
     use std::fs;
 
@@ -203,7 +229,7 @@ xlj/JvsGMFJtkCYYC6uZKMQXD5Z5UzQ7aia8g5ppzjRW2hHwDPgyqQ==
             course_id,
             "Test Course",
             Some("Test Description"),
-            BigDecimal::from(99)
+            99
         )
             .execute(pool)
             .await
@@ -213,8 +239,8 @@ xlj/JvsGMFJtkCYYC6uZKMQXD5Z5UzQ7aia8g5ppzjRW2hHwDPgyqQ==
         let video_id = Uuid::new_v4();
         sqlx::query!(
             r#"
-            INSERT INTO videos (id, course_id, title, description, mux_asset_id, mux_playback_id, duration, "order")
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO videos (id, course_id, title, description, mux_asset_id, mux_playback_id, duration)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             video_id,
             course_id,
@@ -223,7 +249,6 @@ xlj/JvsGMFJtkCYYC6uZKMQXD5Z5UzQ7aia8g5ppzjRW2hHwDPgyqQ==
             "test_asset_id",
             "test_playback_id",
             120.5,
-            1
         )
             .execute(pool)
             .await
@@ -299,13 +324,7 @@ xlj/JvsGMFJtkCYYC6uZKMQXD5Z5UzQ7aia8g5ppzjRW2hHwDPgyqQ==
         let body_bytes = actix_web::body::to_bytes(response.into_body()).await.unwrap();
         let json_response: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
 
-        assert!(json_response.get("playback_id").is_some(), "Response should contain playback_id");
         assert!(json_response.get("token").is_some(), "Response should contain token");
-        assert_eq!(
-            json_response["playback_id"].as_str().unwrap(),
-            "test_playback_id",
-            "Playback ID should match expected value"
-        );
     }
 
     #[tokio::test]
@@ -455,11 +474,8 @@ xlj/JvsGMFJtkCYYC6uZKMQXD5Z5UzQ7aia8g5ppzjRW2hHwDPgyqQ==
         let (user_id, _, _) = setup_test_data(&pool).await;
         let user_email = format!("test_{}@example.com", user_id);
 
-        // Setup repositories
-        let user_repo = web::Data::new(UserRepository::new(pool.clone()));
-
         // Create authentication with user email
-        let auth_user = AuthUser {
+        let _auth_user = AuthUser {
             email: user_email,
         };
 

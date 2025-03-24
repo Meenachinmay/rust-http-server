@@ -33,4 +33,4 @@ http = "0.2"
 migrations = { git = "https://github.com/Meenachinmay/migrations.git"}
 chrono = { version = "0.4", features = ["serde"] }
 bigdecimal = { version = "0.3", features = ["serde"] }
-base64 = "0.21"
+base64 = "0.13.1"

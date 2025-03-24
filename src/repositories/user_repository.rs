@@ -58,6 +58,7 @@ impl UserRepository {
             .await
     }
 
+
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as!(
             User,
@@ -71,15 +72,11 @@ impl UserRepository {
             .fetch_optional(&self.pool)
             .await
     }
-
-    // New method: Authenticate a user by verifying their password
     pub async fn authenticate_user(&self, email: &str, password: &str) -> Result<bool, AuthError> {
-        // First, retrieve the user by email
         let user = self.get_user_by_email(email).await
             .map_err(|e| AuthError::DatabaseError(e.to_string()))?
             .ok_or(AuthError::UserNotFound)?;
 
-        // Verify the password using Argon2
         let parsed_hash = PasswordHash::new(&user.password)
             .map_err(|e| AuthError::HashError(e.to_string()))?;
 
@@ -89,7 +86,6 @@ impl UserRepository {
     }
 }
 
-// Custom error type for authentication-related errors
 #[derive(Debug)]
 pub enum AuthError {
     DatabaseError(String),

@@ -4,9 +4,7 @@ use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, AUTHORIZATION};
-use base64::{engine::general_purpose, Engine as _};
 
 // Add these new structs for direct upload
 #[derive(Serialize, Deserialize, Debug)]
@@ -127,7 +125,7 @@ impl MuxService {
 
         // Set up authentication for Mux API
         let auth = format!("{}:{}", self.config.token_id, self.config.token_secret);
-        let encoded_auth = general_purpose::STANDARD.encode(auth);
+        let encoded_auth = base64::encode(auth);
 
         // Set up headers
         let mut headers = HeaderMap::new();
@@ -191,30 +189,6 @@ impl MuxService {
             .collect();
 
         Ok(videos)
-    }
-
-    pub async fn get_video(&self, video_id: &str) -> Result<Video, Box<dyn Error>> {
-        let url = format!("{}/video/v1/assets/{}", self.config.base_url, video_id);
-
-        let response = self.client
-            .get(&url)
-            .basic_auth(&self.config.token_id, Some(&self.config.token_secret))
-            .send()
-            .await?
-            .json::<VideoAssetResponse>()
-            .await?;
-
-        let asset = response.data;
-        let playback_id = asset.playback_ids.first()
-            .ok_or("No playback ID available")?
-            .id.clone();
-
-        Ok(Video {
-            id: asset.id,
-            playback_id,
-            title: "".to_string(), // You'd need to add a metadata field in your request
-            duration: 0.0, // You'd need to add this field in your response type
-        })
     }
 
     #[cfg(test)]

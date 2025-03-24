@@ -6,12 +6,21 @@ mod repositories;
 mod auth;
 mod communication;
 
-use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{middleware::Logger, web, App, HttpServer };
 use auth::middleware::AuthMiddleware;
 use handlers::{
     auth_handler::{set_password, signin, signup},
     user_handler::get_user,
-    video_handler::{get_video_token, list_videos, create_upload_url}
+    video_handler::{
+        get_video_token,
+        list_videos,
+        create_upload_url,
+    },
+    course_handler::{
+        create_course,
+        get_courses,
+        get_enrollment
+    }
 };
 use repositories::{
     course_repository::CourseRepository,
@@ -25,18 +34,16 @@ use std::env;
 use actix_cors::Cors;
 use migrations::Migrator;
 use services::mux_service::MuxService;
+use services::course_service::CourseService;
 use config::mux::MuxConfig;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
-    // Load .env file before any environment variables are accessed
     if let Err(e) = dotenv() {
         eprintln!("Failed to load .env file: {}", e);
-        // Continue execution as environment variables might be set through other means
     }
 
-    // Verify that required environment variables are present
     let required_vars = [
         "SENDGRID_API_KEY",
         "FRONTEND_URL",
@@ -55,7 +62,6 @@ async fn main() -> std::io::Result<()> {
     let database_url = env::var("DATABASE_URL")
         .expect("DATABASE_URL must be set");
 
-    // Initialize and run migrations from external repository
     info!("Running database migrations from external repository...");
     let migrator = Migrator::new(&database_url)
         .await
@@ -67,9 +73,6 @@ async fn main() -> std::io::Result<()> {
         info!("Database migrations completed successfully");
     }
 
-    // let frontend_url = env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:5173".to_string());
-
-    // Initialize better logging
     FmtSubscriber::builder()
         .with_max_level(Level::DEBUG)
         .with_line_number(true)
@@ -78,19 +81,14 @@ async fn main() -> std::io::Result<()> {
         .with_target(false)
         .init();
 
-    // Create database pool
     let pool = config::database::create_pool()
         .await
         .expect("Failed to create pool");
     info!("Database pool created successfully");
 
-    // Create user repository
     let user_repository = web::Data::new(UserRepository::new(pool.clone()));
     let course_repository = web::Data::new(CourseRepository::new(pool.clone()));
 
-
-
-    // Start HTTP server
     info!("Starting server...");
     HttpServer::new(move || {
 
@@ -98,6 +96,7 @@ async fn main() -> std::io::Result<()> {
         let mux_config = MuxConfig::from_env()
             .expect("Failed to load Mux configuration");
         let mux_service = web::Data::new(MuxService::new(mux_config));
+        let course_service = web::Data::new(CourseService::new(course_repository.get_ref().clone()));
 
         // Create a more permissive CORS configuration that explicitly includes your frontend URL
         let cors = Cors::default()
@@ -115,11 +114,11 @@ async fn main() -> std::io::Result<()> {
             .app_data(user_repository.clone())
             .app_data(course_repository.clone())
             .app_data(mux_service)
+            .app_data(course_service.clone())
             .service(
                 web::scope("api/auth")
                     .route("/signup", web::post().to(signup))
                     .route("/signin", web::post().to(signin))
-                    .route("/test-mux", web::get().to(test_mux_service))
             )
             .service(
                 web::scope("api")
@@ -129,6 +128,9 @@ async fn main() -> std::io::Result<()> {
                     .route("/videos/token", web::post().to(get_video_token))
                     .route("/videos", web::get().to(list_videos))
                     .route("/mux/upload-url", web::post().to(create_upload_url))
+                    .route("/courses", web::post().to(create_course))
+                    .route("/courses", web::get().to(get_courses))
+                    .route("/courses/enrollment", web::get().to(get_enrollment))
             )
     })
         .workers(28)

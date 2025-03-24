@@ -1,4 +1,3 @@
-use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -8,7 +7,7 @@ pub struct Course {
     pub id: Uuid,
     pub title: String,
     pub description: Option<String>,
-    pub price: BigDecimal,
+    pub price: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -17,12 +16,12 @@ pub struct Course {
 pub struct Video {
     pub id: Uuid,
     pub course_id: Uuid,
+    pub upload_id: Option<String>,
     pub title: String,
     pub description: Option<String>,
-    pub mux_asset_id: String,
-    pub mux_playback_id: String,
-    pub duration: f64,
-    pub order: i32,
+    pub mux_asset_id: Option<String>,
+    pub mux_playback_id: Option<String>,
+    pub duration: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -45,4 +44,11 @@ pub struct VideoPlaybackRequest {
 pub struct VideoPlaybackResponse {
     pub playback_id: String,
     pub token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateVideoRequest {
+    pub course_id: Uuid,
+    pub title: String,
+    pub upload_id: String,
 }
