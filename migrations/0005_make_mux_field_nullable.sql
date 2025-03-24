@@ -1,0 +1,4 @@
+ALTER TABLE videos
+ALTER COLUMN mux_asset_id DROP NOT NULL,
+ALTER COLUMN mux_playback_id DROP NOT NULL,
+ALTER COLUMN duration DROP NOT NULL;
