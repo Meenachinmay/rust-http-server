@@ -1,6 +1,6 @@
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
-use crate::models::course::{Course, CreateVideoRequest, Video};
+use crate::models::course::{Course, CreateVideoRequest, Enrollment, Video};
 use chrono::{ Utc };
 use std::error::Error;
 use crate::handlers::course_handler::CreateCourseRequest;
@@ -31,6 +31,23 @@ impl CourseRepository {
             .await?;
 
         Ok(course)
+    }
+
+    pub async fn create_enrollment(&self, user_id: Uuid, course_id: Uuid) -> Result<Enrollment, Box<dyn Error>> {
+        let enrollment = sqlx::query_as!(
+            Enrollment,
+            r#"
+            INSERT INTO enrollments (user_id, course_id)
+            VALUES ($1,$2)
+            RETURNING id, user_id, course_id, created_at, expires_at
+            "#,
+            user_id,
+            course_id
+        )
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(enrollment)
     }
 
     pub async fn get_all_courses(&self) -> Result<Vec<Course>, Box<dyn Error>> {
@@ -72,9 +89,7 @@ impl CourseRepository {
             Video,
             r#"
             SELECT
-                id, course_id, upload_id, title, description,
-                mux_asset_id, mux_playback_id, duration,
-                created_at, updated_at
+                *
             FROM videos
             WHERE id = $1
             "#,
@@ -86,13 +101,28 @@ impl CourseRepository {
         Ok(video)
     }
 
+    pub async fn get_all_videos_for_course(&self, course_id: Uuid) -> Result<Vec<Video>, Box<dyn Error>> {
+       let videos_for_course = sqlx::query_as!(
+           Video,
+           r#"
+           SELECT * FROM videos
+           WHERE course_id = $1
+           "#,
+           course_id
+       )
+           .fetch_all(&self.pool)
+           .await?;
+
+        Ok(videos_for_course)
+    }
+
     pub async fn create_video(&self, new_video: CreateVideoRequest) -> Result<Video, Box<dyn Error>> {
         let video = sqlx::query_as!(
             Video,
             r#"
             INSERT INTO videos (course_id, title, upload_id, description, mux_asset_id, mux_playback_id, duration)
             VALUES ($1, $2, $3, NULL, NULL, NULL, NULL)
-            RETURNING id, course_id, title, description, upload_id, mux_asset_id, mux_playback_id, duration, created_at, updated_at
+            RETURNING id, course_id, title, description, upload_id, status, course_value, mux_asset_id, mux_playback_id, duration, created_at, updated_at
             "#,
             new_video.course_id,
             new_video.title,

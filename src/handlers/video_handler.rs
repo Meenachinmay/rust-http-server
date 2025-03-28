@@ -1,4 +1,4 @@
-use actix_web::{web, Error, HttpResponse, Responder, Result};
+use actix_web::{web, HttpResponse, Responder, Result};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use crate::auth::extractor::AuthUser;
@@ -70,37 +70,6 @@ pub async fn get_video_token(
     let response = PlaybackTokenResponse { token: token_string };
 
     Ok(HttpResponse::Ok().json(response))
-}
-
-pub async fn list_videos(
-    mux_service: web::Data<MuxService>,
-) -> Result<HttpResponse, Error> {
-
-    #[cfg(not(test))]
-    let videos = match mux_service.list_videos().await {
-        Ok(videos) => videos,
-        Err(e) => {
-            eprintln!("Failed to list videos from mux: {}", e);
-            return Ok(HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Failed to list videos from Mux"
-            })))
-        }
-    };
-
-    #[cfg(test)]
-    let videos = match mux_service.list_videos_test().await {
-        Ok(videos) => videos,
-        Err(e) => {
-            eprintln!("Failed to list videos from Mux: {}", e);
-            return Ok(HttpResponse::InternalServerError().json(serde_json::json!({
-                "error": "Failed to fetch videos from Mux"
-            })));
-        }
-    };
-
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "videos": videos
-    })))
 }
 
 pub async fn create_upload_url(
@@ -464,53 +433,4 @@ xlj/JvsGMFJtkCYYC6uZKMQXD5Z5UzQ7aia8g5ppzjRW2hHwDPgyqQ==
             "Error message should indicate video not found"
         );
     }
-
-    #[tokio::test]
-    async fn test_list_videos() {
-        // Setup test database
-        let pool = setup_test_db().await;
-
-        // Create test user in database
-        let (user_id, _, _) = setup_test_data(&pool).await;
-        let user_email = format!("test_{}@example.com", user_id);
-
-        // Create authentication with user email
-        let _auth_user = AuthUser {
-            email: user_email,
-        };
-
-        // Create a MuxService with test configuration
-        let mux_config = MuxConfig {
-            token_id: "test_token_id".to_string(),
-            token_secret: "test_token_secret".to_string(),
-            signing_key_id: "test_signing_key_id".to_string(),
-            private_key: get_test_private_key(),
-            base_url: "https://api.mux.com".to_string(),
-        };
-        let mux_service = web::Data::new(MuxService::new(mux_config));
-
-        // Call the handler directly with all required parameters
-        let result = list_videos(
-            mux_service,
-        ).await;
-
-        // Verify success response
-        assert!(result.is_ok(), "Handler should return a response");
-        let response = result.unwrap();
-        assert_eq!(response.status(), StatusCode::OK, "Status should be OK");
-
-        // Parse response body
-        let body_bytes = actix_web::body::to_bytes(response.into_body()).await.unwrap();
-        let json_response: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
-
-        assert!(json_response.get("videos").is_some(), "Response should contain videos array");
-        assert!(json_response["videos"].is_array(), "Videos should be an array");
-
-        // Verify the content of the mock videos
-        let videos = json_response["videos"].as_array().unwrap();
-        assert_eq!(videos.len(), 2, "Should have 2 mock videos");
-        assert_eq!(videos[0]["id"].as_str().unwrap(), "mock_asset_id_1");
-        assert_eq!(videos[1]["title"].as_str().unwrap(), "Mock Video 2");
-    }
-
 }
