@@ -17,6 +17,8 @@ pub struct Video {
     pub id: Uuid,
     pub course_id: Uuid,
     pub upload_id: Option<String>,
+    pub status: String,
+    pub course_value: String,
     pub title: String,
     pub description: Option<String>,
     pub mux_asset_id: Option<String>,

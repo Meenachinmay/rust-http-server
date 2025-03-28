@@ -13,13 +13,14 @@ use handlers::{
     user_handler::get_user,
     video_handler::{
         get_video_token,
-        list_videos,
         create_upload_url,
     },
     course_handler::{
         create_course,
         get_courses,
-        get_enrollment
+        get_enrollment,
+        enroll_user,
+        get_course_videos
     }
 };
 use repositories::{
@@ -126,11 +127,12 @@ async fn main() -> std::io::Result<()> {
                     .route("/users/{id}", web::get().to(get_user))
                     .route("/setpassword", web::post().to(set_password))
                     .route("/videos/token", web::post().to(get_video_token))
-                    .route("/videos", web::get().to(list_videos))
+                    .route("/videos", web::get().to(get_course_videos))
                     .route("/mux/upload-url", web::post().to(create_upload_url))
                     .route("/courses", web::post().to(create_course))
                     .route("/courses", web::get().to(get_courses))
                     .route("/courses/enrollment", web::get().to(get_enrollment))
+                    .route("/api/courses/enrollment", web::post().to(enroll_user))
             )
     })
         .workers(28)

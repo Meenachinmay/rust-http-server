@@ -49,14 +49,6 @@ pub struct MuxService {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Video {
-    pub id: String,
-    pub playback_id: String,
-    pub title: String,
-    pub duration: f64,
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct VideoAssetResponse {
     pub data: VideoAsset,
 }
@@ -156,72 +148,6 @@ impl MuxService {
         Ok(upload_response.data)
     }
 
-    // need to update this method
-    pub async fn list_videos(&self) -> Result<Vec<Video>, Box<dyn Error>> {
-        let url = format!("{}/video/v1/assets", self.config.base_url);
-
-        let response = self.client
-            .get(&url)
-            .basic_auth(&self.config.token_id, Some(&self.config.token_secret))
-            .send()
-            .await?
-            .json::<serde_json::Value>()
-            .await?;
-
-        // Process the response to extract video details
-        let videos = response["data"].as_array()
-            .ok_or("Invalid response format")?
-            .iter()
-            .filter_map(|asset| {
-                let id = asset["id"].as_str()?;
-                let playback_id = asset["playback_ids"].as_array()?
-                    .first()?["id"].as_str()?;
-                let title = asset["metadata"]["title"].as_str().unwrap_or("Untitled");
-                let duration = asset["duration"].as_f64().unwrap_or(0.0);
-
-                Some(Video {
-                    id: id.to_string(),
-                    playback_id: playback_id.to_string(),
-                    title: title.to_string(),
-                    duration,
-                })
-            })
-            .collect();
-
-        Ok(videos)
-    }
-
-    #[cfg(test)]
-    pub fn with_mock_list_videos() -> Self {
-        let config = MuxConfig {
-            token_id: "test_token_id".to_string(),
-            token_secret: "test_token_secret".to_string(),
-            signing_key_id: "test_signing_key_id".to_string(),
-            private_key: String::from("-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----"),
-            base_url: "https://api.mux.com".to_string(),
-        };
-
-        Self { config, client: Client::new() }
-    }
-
-    #[cfg(test)]
-    pub async fn list_videos_test(&self) -> Result<Vec<Video>, Box<dyn Error>> {
-        // Return mock data instead of making an actual API call
-        Ok(vec![
-            Video {
-                id: "mock_asset_id_1".to_string(),
-                playback_id: "mock_playback_id_1".to_string(),
-                title: "Mock Video 1".to_string(),
-                duration: 120.0,
-            },
-            Video {
-                id: "mock_asset_id_2".to_string(),
-                playback_id: "mock_playback_id_2".to_string(),
-                title: "Mock Video 2".to_string(),
-                duration: 180.0,
-            },
-        ])
-    }
 }
 
 #[cfg(test)]
