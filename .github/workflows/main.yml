@@ -72,6 +72,10 @@ jobs:
           echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
           echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
+          echo "MUX_TOKEN_ID=${{ secrets.MUX_TOKEN_ID }}" >> .env
+          echo "MUX_TOKEN_SECRET=${{ secrets.MUX_TOKEN_SECRET }}" >> .env
+          echo "MUX_SIGNING_KEY_ID=${{ secrets.MUX_SIGNING_KEY_ID }}" >> .env
+          echo "MUX_SIGNING_KEY_SECRET=${{ secrets.MUX_SIGNING_KEY_SECRET }}" >> .env
 
       - name: Install SQLx CLI
         run: cargo install sqlx-cli --no-default-features --features postgres

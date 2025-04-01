@@ -31,6 +31,8 @@ RUN apt-get update && \
 # Copy the binary from the builder stage
 COPY --from=builder /app/rust-application /app/rust-application
 
+COPY .env .env
+
 # Expose the port
 EXPOSE 8080
 
