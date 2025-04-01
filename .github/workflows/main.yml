@@ -1,17 +1,22 @@
-name: CI/CD Pipeline for GCP Deployment
+name: Main Branch CI Pipeline
 
-# Define when this pipeline should run
 on:
   push:
-    branches: [ dev ]
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened ]
 
 env:
-  RUST_VERSION: '1.85.0'            # Latest stable Rust version
+  PROJECT_ID: rusty-lamb
+  SERVICE_NAME: rusty-lamb
+  REGISTRY_REGION: asia-northeast1
+  ARTIFACT_REGISTRY: rusty-lamb
+  RUST_VERSION: '1.85.0'
 
 jobs:
-  test-and-build:
+  build-and-test:
     runs-on: ubuntu-latest
-
     services:
       postgres:
         image: postgres:16
@@ -59,16 +64,14 @@ jobs:
         run: |
           echo "${{ secrets.MUX_PEM_CONTENT }}" > mux.pem
           chmod 600 mux.pem
-          echo "Created mux.pem file with secret content"
 
       - name: Create .env file
         run: |
           echo "DATABASE_URL_TEST=postgresql://postgres:password@localhost:5432/rust" > .env
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" > .env
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
           echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
           echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
-          echo "Created .env file with necessary configurations"
 
       - name: Install SQLx CLI
         run: cargo install sqlx-cli --no-default-features --features postgres
@@ -82,3 +85,25 @@ jobs:
         run: cargo test
         env:
           DATABASE_URL_TEST: postgresql://postgres:password@localhost:5432/rust
+
+      # Build but don't deploy - just for verification
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        if: github.event_name != 'pull_request'
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+        if: github.event_name != 'pull_request'
+
+      - name: Configure Docker for GCP
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+        if: github.event_name != 'pull_request'
+
+      - name: Build and tag Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ github.sha }} .
+        if: github.event_name != 'pull_request'
