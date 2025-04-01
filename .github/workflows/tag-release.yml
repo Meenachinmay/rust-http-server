@@ -1,0 +1,125 @@
+name: Tag-Based Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on any tag starting with 'v' (e.g., v1.0.0)
+
+env:
+  PROJECT_ID: rusty-lamb
+  SERVICE_NAME: rusty-lamb
+  REGION: us-central1
+  REGISTRY_REGION: asia-northeast1
+  ARTIFACT_REGISTRY: rusty-lamb
+  RUST_VERSION: '1.85.0'
+
+jobs:
+  test-build-deploy:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: rust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Extract tag version
+        id: tag
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      # Testing steps
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          profile: minimal
+          override: true
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libpq-dev pkg-config
+
+      - name: Create mux.pem file
+        run: |
+          echo "${{ secrets.MUX_PEM_CONTENT }}" > mux.pem
+          chmod 600 mux.pem
+
+      - name: Create .env file
+        run: |
+          echo "DATABASE_URL_TEST=postgresql://postgres:password@localhost:5432/rust" > .env
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+          echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}" >> .env
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> .env
+          echo "SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}" >> .env
+
+      - name: Install SQLx CLI
+        run: cargo install sqlx-cli --no-default-features --features postgres
+
+      - name: Set up database schema
+        run: |
+          sqlx database create --database-url postgresql://postgres:password@localhost:5432/rust
+          sqlx migrate run --database-url postgresql://postgres:password@localhost:5432/rust
+
+      - name: Run tests
+        run: cargo test
+        env:
+          DATABASE_URL_TEST: postgresql://postgres:password@localhost:5432/rust
+
+      # Deployment steps
+      - id: 'auth'
+        name: 'Authenticate to Google Cloud'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+
+      - name: Configure Docker for GCP
+        run: |
+          gcloud auth configure-docker ${{ env.REGISTRY_REGION }}-docker.pkg.dev
+
+      - name: Build and tag Docker image
+        run: |
+          docker build -t ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.tag.outputs.VERSION }} .
+          # Also tag as latest for convenience
+          docker tag ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.tag.outputs.VERSION }} ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
+
+      - name: Push Docker image to Artifact Registry
+        run: |
+          docker push ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.tag.outputs.VERSION }}
+          docker push ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --region ${{ env.REGION }} \
+            --image ${{ env.REGISTRY_REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/${{ env.SERVICE_NAME }}:${{ steps.tag.outputs.VERSION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "DATABASE_URL=${{ secrets.DATABASE_URL }},SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }},FRONTEND_URL=${{ secrets.FRONTEND_URL }},SENDER_EMAIL=${{ secrets.SENDER_EMAIL }}"

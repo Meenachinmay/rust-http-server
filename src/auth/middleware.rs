@@ -1,8 +1,4 @@
-use actix_web::{
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpResponse, http::header,
-    body::EitherBody,
-};
+use actix_web::{dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform}, Error, HttpResponse, http::header, body::EitherBody, HttpMessage};
 use futures::future::{ready, LocalBoxFuture, Ready};
 use tracing::{error, info};
 use serde_json::json;
@@ -92,6 +88,10 @@ where
         match validate_token(auth_token) {
             Ok(claims) => {
                 info!("Authenticated user: {}", claims.sub);
+
+                let user_email = claims.sub.clone();
+                req.extensions_mut().insert(user_email);
+
                 let fut = self.service.call(req);
                 Box::pin(async move {
                     let res = fut.await?;

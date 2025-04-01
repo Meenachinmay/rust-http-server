@@ -58,6 +58,7 @@ impl UserRepository {
             .await
     }
 
+
     pub async fn get_user_by_email(&self, email: &str) -> Result<Option<User>, sqlx::Error> {
         sqlx::query_as!(
             User,
@@ -71,15 +72,11 @@ impl UserRepository {
             .fetch_optional(&self.pool)
             .await
     }
-
-    // New method: Authenticate a user by verifying their password
     pub async fn authenticate_user(&self, email: &str, password: &str) -> Result<bool, AuthError> {
-        // First, retrieve the user by email
         let user = self.get_user_by_email(email).await
             .map_err(|e| AuthError::DatabaseError(e.to_string()))?
             .ok_or(AuthError::UserNotFound)?;
 
-        // Verify the password using Argon2
         let parsed_hash = PasswordHash::new(&user.password)
             .map_err(|e| AuthError::HashError(e.to_string()))?;
 
@@ -89,7 +86,6 @@ impl UserRepository {
     }
 }
 
-// Custom error type for authentication-related errors
 #[derive(Debug)]
 pub enum AuthError {
     DatabaseError(String),
@@ -137,7 +133,7 @@ mod tests {
         let repo = UserRepository::new(pool);
 
         // Create a test user request
-        let test_email = format!("test_{}@example.com", uuid::Uuid::new_v4());
+        let test_email = format!("test_{}@example.com", Uuid::new_v4());
         let user_request = CreateUserRequest {
             email: test_email.clone(),
             password: "TestPassword123!".to_string(),
@@ -184,13 +180,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_user_by_email() {
-        // Create a pool
         let pool = create_test_pool().await;
 
-        // Create a repository
         let repo = UserRepository::new(pool);
 
-        // Create a test user
         let test_email = format!("test_email_{}@example.com", uuid::Uuid::new_v4());
         let user_request = CreateUserRequest {
             email: test_email.clone(),
@@ -199,7 +192,6 @@ mod tests {
 
         repo.create_user(user_request).await.unwrap();
 
-        // Test getting the user by email
         let result = repo.get_user_by_email(&test_email).await;
         assert!(result.is_ok(), "Should get a user by email successfully");
 
@@ -212,13 +204,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_authenticate_user() {
-        // Create a pool
         let pool = create_test_pool().await;
 
-        // Create a repository
         let repo = UserRepository::new(pool);
 
-        // Create a test user
         let test_email = format!("test_auth_{}@example.com", uuid::Uuid::new_v4());
         let password = "TestPassword123!";
         let user_request = CreateUserRequest {
@@ -228,12 +217,10 @@ mod tests {
 
         repo.create_user(user_request).await.unwrap();
 
-        // Test authenticating with correct password
         let result = repo.authenticate_user(&test_email, password).await;
         assert!(result.is_ok(), "Authentication should succeed");
         assert!(result.unwrap(), "Authentication should return true for correct password");
 
-        // Test authenticating with incorrect password
         let result = repo.authenticate_user(&test_email, "WrongPassword123!").await;
         assert!(result.is_ok(), "Authentication should not error");
         assert!(!result.unwrap(), "Authentication should return false for incorrect password");

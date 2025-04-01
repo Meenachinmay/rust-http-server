@@ -154,7 +154,6 @@ pub async fn set_password(
     }
 }
 
-// Handler for signin
 pub async fn signin(
     signin_req: web::Json<SigninRequest>,
     repo: web::Data<UserRepository>,
