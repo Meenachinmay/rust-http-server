@@ -33,6 +33,9 @@ COPY --from=builder /app/rust-application /app/rust-application
 
 COPY .env .env
 
+COPY mux.pem mux.pem
+RUN chmod 600 mux.pem
+
 # Expose the port
 EXPOSE 8080
 
