@@ -41,9 +41,7 @@ use config::mux::MuxConfig;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
-    if let Err(e) = dotenv() {
-        eprintln!("Failed to load .env file: {}", e);
-    }
+    dotenv().ok();
 
     let required_vars = [
         "SENDGRID_API_KEY",
